@@ -2,6 +2,7 @@ import random
 from enum import IntEnum
 import sys
 import argparse
+import math
 
 class Card:
     def __init__(self, color, rank, value):
@@ -86,7 +87,48 @@ class BasicStrategyPlayer(Player):
         if pval < 17:
             return Action.HIT
         return Action.STAND
-        
+
+"""
+Represents a node in the MCTS tree which stores information
+about itself along with references to its parent/children.
+For the UCB1 formula I defined a constant CURIOSITY_FACTOR
+to alter the favorability of less explored nodes over
+those best known for higher overall values.
+"""
+CURIOSITY_FACTOR = 2
+class MCTSNode:
+    # No Arguments Implies Root Node
+    def __init__(self, action = None, parent = None):
+        self.parent = parent
+        self.action = action
+        self.children = []
+        self.total = 0
+        self.visits = 0
+    
+    # Returns The Expected Value Of The Node
+    def score(self):
+        return self.total * 1.0 / self.visits
+
+    # Given Total Number Of Iterations So Far
+    # Calculates UCB1 Result For This Node
+    # Assuming It Has Already Been Visted!
+    def ucb1(self, num_iterations):
+        if self.visits == 0:
+            return math.inf
+        return self.score() + CURIOSITY_FACTOR * (math.sqrt(math.log(num_iterations) / self.visits))
+    
+    # Expand; Each Action Expands To One Child Node
+    def expand(self, actions):
+        for action in actions:
+            self.children.append(MCTSNode(action, self))
+
+    # Recursively Backpropogates Score AND Increment Node Visits
+    def backpropogate(self, value):
+        self.total += value
+        self.visits += 1
+        if (self.parent is not None):
+            self.parent.backpropogate(value)
+
 MCTS_N = 100
         
 class MCTSPlayer(Player):
@@ -119,6 +161,10 @@ class MCTSPlayer(Player):
         # We create a new game object with the reduced deck, played by our rollout player
         g1 = Game(deck, p, verbose=False)
         
+        # Create Initial Node Corresponding To Current State
+        root = MCTSNode()
+        root.expand(actions)
+
         results = {}
         for i in range(MCTS_N):
         
