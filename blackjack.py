@@ -95,19 +95,25 @@ For the UCB1 formula I defined a constant CURIOSITY_FACTOR
 to alter the favorability of less explored nodes over
 those best known for higher overall values.
 """
-CURIOSITY_FACTOR = 2
+CURIOSITY_FACTOR = 3.5
 class MCTSNode:
     # No Arguments Implies Root Node
     def __init__(self, action = None, parent = None):
         self.parent = parent
-        self.action = action
+        self.action_path = []
+        if parent is not None and action is not None:
+            self.action_path = parent.action_path + [action]
         self.children = []
         self.total = 0
         self.visits = 0
     
     # Returns The Expected Value Of The Node
     def score(self):
-        return self.total * 1.0 / self.visits
+        return 0 if self.visits == 0 else self.total * 1.0 / self.visits
+
+    # Gets The Best Action By Its Expected Value
+    def best_action(self):
+        return max(self.children, key=lambda node:node.score()).action_path[-1]
 
     # Given Total Number Of Iterations So Far
     # Calculates UCB1 Result For This Node
@@ -116,7 +122,20 @@ class MCTSNode:
         if self.visits == 0:
             return math.inf
         return self.score() + CURIOSITY_FACTOR * (math.sqrt(math.log(num_iterations) / self.visits))
-    
+
+    # Selects A Child Node For Expansion, Null If No Children
+    # Returns An Unvisited Node If Available Or Highest UCB1
+    def select_child(self, num_iterations):
+        max = None
+        max_ucb1 = None
+        for candidate in self.children:
+            if candidate.visits == 0:
+                return candidate
+            if max is None or candidate.ucb1(num_iterations) > max_ucb1:
+                max = candidate
+                max_ucb1 = candidate.ucb1(num_iterations)
+        return max
+
     # Expand; Each Action Expands To One Child Node
     def expand(self, actions):
         for action in actions:
@@ -129,7 +148,7 @@ class MCTSNode:
         if (self.parent is not None):
             self.parent.backpropogate(value)
 
-MCTS_N = 100
+MCTS_N = 1000
         
 class MCTSPlayer(Player):
     """
@@ -144,7 +163,6 @@ class MCTSPlayer(Player):
         self.bet = 2
         self.deck = deck
     def get_action(self, cards, actions, dealer_cards):
-        
         # Make a copy of the deck!
         deck = self.deck[:]
         
@@ -165,11 +183,25 @@ class MCTSPlayer(Player):
         root = MCTSNode()
         root.expand(actions)
 
-        results = {}
         for i in range(MCTS_N):
-        
+            # Get The Next Best Node To Expand
+            selected = root.select_child(i + 1)
+            
+            # If Node Has Already Been Visited, Select Child
+            # Expand Node If Necessary
+            while selected.visits > 0:
+                next_selection = selected.select_child(i)
+                if next_selection is None:
+                    selected.expand(actions)
+                else:
+                    selected = next_selection
+
             # The rollout player stores its action history, we reset this first
             p.reset()
+
+            # Rollout After Following Initial Sequence Leading To Node
+            for action in selected.action_path:
+                p.queue_action(action)
             
             # continue_round allows us to pass a partial game state (which cards we have, what the open 
             # card of the dealer is, and how much we've bet), and continue the game from there 
@@ -179,24 +211,11 @@ class MCTSPlayer(Player):
             # The return value is the amount of money the agent won, across *all* hands (if they split)
             res = g1.continue_round(cards, dealer_cards, self.bet)
             
-            # After we are done, we extract the first action we took
-            act = p.actions[0]
-            
             # Record the result for each possible action
-            if act not in results:
-                results[act] = []
-            results[act].append(res)
+            selected.backpropogate(res)
         
         # Calculate the action with the highest *average* return
-        max = -1000
-        act = Action.STAND
-        avgs = {}
-        for a in results:
-            score = sum(results[a])*1.0/len(results[a])
-            avgs[a] = score
-            if score > max:
-                max = score
-                act = a
+        act = root.best_action()
                 
         # Make sure we also record our own bet in case we double down (!)
         if act == Action.DOUBLE_DOWN:
@@ -213,12 +232,18 @@ class RolloutPlayer(Player):
         self.name = name
         self.actions = []
         self.deck = deck
+        self.queued_actions = []
+    # Allow Initial Action Before Random Rollout
+    def queue_action(self, action):
+        self.queued_actions.append(action)
     def get_action(self, cards, actions, dealer_cards):
-        act = random.choice(actions)
+        # Next Queued Action Or Random If None
+        act = self.queued_actions.pop(0) if len(self.queued_actions) > 0 else random.choice(actions)
         self.actions.append(act)
         return act
     def reset(self):
         self.actions = []
+        self.queued_actions = []
         
 class ConsolePlayer(Player):
     def get_action(self, cards, actions, dealer_cards):
@@ -414,7 +439,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run a simulation of a Blackjack agent.')
     parser.add_argument('player', nargs="?", default="default", 
                         help='the player type (available values: %s)'%(", ".join(player_types.keys())))
-    parser.add_argument('-n', '--count', dest='count', action='store', default=100,
+    parser.add_argument('-n', '--count', dest='count', action='store', default=1000,
                         help='How many games to run')
     parser.add_argument('-s', '-q', '--silent', '--quiet', dest='verbose', action='store_const', default=True, const=False,
                         help='Do not print game output (only average score at the end is printed)')
