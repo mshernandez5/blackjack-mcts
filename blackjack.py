@@ -439,7 +439,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run a simulation of a Blackjack agent.')
     parser.add_argument('player', nargs="?", default="default", 
                         help='the player type (available values: %s)'%(", ".join(player_types.keys())))
-    parser.add_argument('-n', '--count', dest='count', action='store', default=1000,
+    parser.add_argument('-n', '--count', dest='count', action='store', default=100,
                         help='How many games to run')
     parser.add_argument('-s', '-q', '--silent', '--quiet', dest='verbose', action='store_const', default=True, const=False,
                         help='Do not print game output (only average score at the end is printed)')
