@@ -152,11 +152,11 @@ MCTS_N = 1000
         
 class MCTSPlayer(Player):
     """
-    This is only a demonstration, not *actual* Monte Carlo Tree Search!
-    
-    This agent will run MCTS_N simulations. For each simulation, the cards the player has not yet seen are shuffled and used as the assumed deck. Then the `RolloutPlayer` plays MCTS_N games starting from that random shuffle 
-    The agent will only remember the *first* action taken by the `RolloutPlayer` and how many points where obtained 
-    on average for each possible action.
+    This agent will run MCTS_N simulations.
+    For each simulation, the cards the player has not yet seen are shuffled and used as the assumed deck.
+    Then the `RolloutPlayer` plays MCTS_N games starting from that random shuffle.
+    The agent will give the `RolloutPlayer` an initial sequence of actions and let it
+        complete the game randomly, recording how many points where obtained for each rollout.
     """
     def __init__(self, name, deck):
         self.name = name
